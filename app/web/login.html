@@ -1,0 +1,30 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Masuk - Catatan Keuangan</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<div class="wrap"><nav><a class="logo" href="/">💰 Catatan Keuangan</a></nav>
+<div class="box card"><div class="tabs"><button class="btn" id="tl" type="button">Masuk</button><button class="btn o" id="tr" type="button">Daftar</button></div>
+<form id="f"><div id="nm" hidden><label for="name">Nama</label><input id="name" autocomplete="name"></div>
+<label for="email">Email</label><input id="email" type="email" required autocomplete="email">
+<label for="pw">Password</label><input id="pw" type="password" required minlength="6" autocomplete="current-password">
+<p class="err" id="err"></p><button class="btn w" id="go">Masuk</button></form></div></div>
+<script src="/static/app.js"></script>
+<script>
+if (tok()) location.href = '/dashboard';
+let reg = false;
+function mode(r) {
+  reg = r; $('nm').hidden = !r; $('go').textContent = r ? 'Daftar' : 'Masuk'; $('err').textContent = '';
+  $('tl').className = 'btn' + (r ? ' o' : ''); $('tr').className = 'btn' + (r ? '' : ' o');
+}
+$('tl').onclick = () => mode(false); $('tr').onclick = () => mode(true);
+if (new URLSearchParams(location.search).get('daftar')) mode(true);
+$('f').onsubmit = async (e) => {
+  e.preventDefault(); $('err').textContent = ''; $('go').disabled = true;
+  try {
+    const body = { email: $('email').value, password: $('pw').value };
+    if (reg) body.name = $('name').value;
+    const r = await api(reg ? '/auth/register' : '/auth/login', { method: 'POST', body });
+    localStorage.setItem('token', r.token); localStorage.setItem('user', JSON.stringify(r.data));
+    location.href = '/dashboard';
+  } catch (x) { $('err').textContent = x.message; }
+  $('go').disabled = false;
+};
+</script></body></html>

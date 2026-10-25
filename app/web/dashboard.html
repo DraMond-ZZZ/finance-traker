@@ -1,0 +1,52 @@
+<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard - Catatan Keuangan</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<div class="wrap"><nav><a class="logo" href="/">💰 Catatan Keuangan</a><span><span id="who"></span> <button class="btn o" onclick="logout()">Keluar</button></span></nav>
+<div class="grid"><div class="card"><p>Pemasukan</p><p class="big in" id="sin">-</p></div><div class="card"><p>Pengeluaran</p><p class="big out" id="sout">-</p></div><div class="card"><p>Saldo</p><p class="big" id="sbal">-</p></div></div>
+<div class="cols"><div>
+<form class="card" id="f"><h3>Tambah transaksi</h3>
+<label for="type">Jenis</label><select id="type"><option value="expense">Pengeluaran</option><option value="income">Pemasukan</option></select>
+<label for="cat">Kategori</label><select id="cat"></select>
+<label for="pay">Metode pembayaran</label><select id="pay"></select>
+<label for="amt">Jumlah (Rp)</label><input id="amt" type="number" min="1" step="any" required>
+<label for="date">Tanggal</label><input id="date" type="date" required>
+<label for="desc">Keterangan</label><input id="desc" maxlength="200">
+<p class="err" id="err"></p><button class="btn w">Simpan</button></form>
+<div class="card" style="margin-top:16px"><h3>Anggaran</h3><div id="bud"><p>Belum ada anggaran.</p></div></div></div>
+<div class="card"><h3>Riwayat transaksi</h3><div class="tbl"><table><thead><tr><th>Tanggal</th><th>Kategori</th><th>Keterangan</th><th>Jumlah</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></div></div></div>
+<script src="/static/app.js"></script>
+<script>
+if (!tok()) location.href = '/login';
+$('who').textContent = (JSON.parse(localStorage.getItem('user') || '{}').name || '') + ' ';
+$('date').value = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+let cats = [];
+const fillCats = () => $('cat').innerHTML = cats.filter((c) => c.type === $('type').value).map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+$('type').onchange = fillCats;
+async function load() {
+  const [t, b] = await Promise.all([api('/transactions'), api('/budgets')]);
+  const rows = t.data.slice().sort((a, b) => b.transaction_date.localeCompare(a.transaction_date) || b.id - a.id);
+  const sum = (k) => rows.filter((r) => r.type === k).reduce((s, r) => s + r.amount, 0);
+  $('sin').textContent = rp(sum('income')); $('sout').textContent = rp(sum('expense')); $('sbal').textContent = rp(sum('income') - sum('expense'));
+  $('rows').innerHTML = rows.map((r) => `<tr><td>${r.transaction_date}</td><td>${esc(r.category_name)}</td><td>${esc(r.description)}</td>
+    <td class="${r.type === 'income' ? 'in' : 'out'}">${r.type === 'income' ? '+' : '-'}${rp(r.amount)}</td><td><button class="btn s" data-id="${r.id}">Hapus</button></td></tr>`).join('') || '<tr><td colspan="5">Belum ada transaksi.</td></tr>';
+  if (b.data.length) $('bud').innerHTML = b.data.map((x) => { const p = Math.min(100, x.spent / x.amount * 100);
+    return `<div>${esc(x.category_name)} (${x.month}/${x.year})<br><small>${rp(x.spent)} / ${rp(x.amount)}</small><div class="bar"><i class="${x.spent > x.amount ? 'x' : ''}" style="width:${p}%"></i></div></div>`; }).join('');
+}
+$('rows').onclick = async (e) => {
+  const id = e.target.dataset.id;
+  if (id && confirm('Hapus transaksi ini?')) { await api('/transactions/' + id, { method: 'DELETE' }); load(); }
+};
+$('f').onsubmit = async (e) => {
+  e.preventDefault(); $('err').textContent = '';
+  try {
+    await api('/transactions', { method: 'POST', body: { type: $('type').value, category_id: +$('cat').value, payment_method_id: +$('pay').value,
+      amount: +$('amt').value, description: $('desc').value || null, transaction_date: $('date').value } });
+    $('amt').value = ''; $('desc').value = ''; load();
+  } catch (x) { $('err').textContent = x.message; }
+};
+(async () => {
+  const [c, p] = await Promise.all([api('/categories'), api('/payment-methods')]);
+  cats = c.data; fillCats();
+  $('pay').innerHTML = p.data.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  load();
+})().catch((x) => ($('err').textContent = x.message));
+</script></body></html>
